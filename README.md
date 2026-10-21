@@ -35,6 +35,29 @@ or `/artifact-to-hex`.
 - Node 18+ for the logic harness
 - Claude in Chrome, signed in to Hex and claude.ai, for the UI checks
 
+## Safety
+
+The skill contains no credentials and no connection details. It acts only through the logins on the
+machine running it: your `hex` CLI login and your `~/.snowflake/connections.toml`. So:
+
+- **Before anything is created, it shows you the Hex workspace and Snowflake account it will use and asks
+  you to confirm.** `init` won't run without `--confirm-workspace <id>` matching the active Hex login.
+- **Each migration is pinned to the confirmed workspace**: `push` and `run` refuse if the active
+  `hex` login changes mid-way.
+- **Optional blocklist**: if this machine also has an employer's or client's logins, list the ones the
+  skill must never touch in `~/.artifact2hex/config.json` (stays on your machine):
+
+  ```json
+  {
+    "blocked_hex_workspaces": ["<hex workspace id>"],
+    "blocked_snowflake_accounts": ["<ORG-ACCOUNT or account locator>"]
+  }
+  ```
+
+  Find the values with `python3 scripts/hexgen.py whoami` and `python3 scripts/sfquery.py --whoami`.
+  Better still, keep separate logins: a dedicated `hex` profile (`hex auth login <profile>`,
+  `hex auth switch <profile>`) and a dedicated Snowflake connection name (`SNOWFLAKE_CONNECTION=<name>`).
+
 ## Layout
 
 ```

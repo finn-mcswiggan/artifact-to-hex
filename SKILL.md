@@ -26,6 +26,10 @@ Bundled resources (paths relative to this skill's folder):
 
 ## Stops (the only times to ask the user)
 
+0. **Always, before anything is created: confirm where it will run.** Show the user the output of
+   `hexgen.py whoami` (Hex user + workspace) and `sfquery.py --whoami` (Snowflake account, user, role)
+   and ask "Build here?". Hex and Snowflake access come from whatever logins are active on this machine,
+   which may be an employer's. Never assume; a wrong answer here puts someone's data in the wrong place.
 1. More than one candidate artifact in the conversation, or more than one Snowflake connection in Hex and
    no way to tell which one the artifact used.
 2. A blocker you cannot work around (hex CLI not authenticated, no Snowflake access, the queries can't be
@@ -50,20 +54,26 @@ Everything else (naming, cell design, layout decisions, fix rounds) you decide, 
 1. **Find the artifact.** It's in this conversation: a claude.ai artifact URL (read its HTML with the
    Artifact tool, `action: "read"`) or an HTML file written earlier in the session. If the user named
    one, use it.
-2. **Hex CLI**: `hex --version` and `hex auth status`. If not logged in, ask the user to run
-   `hex auth login` (a browser login you cannot do for them).
+2. **Hex CLI**: `hex --version`, then `python3 <skill>/scripts/hexgen.py whoami`. If not logged in, ask the
+   user to run `hex auth login` (a browser login you cannot do for them). If they have several profiles,
+   `hex auth switch <profile>` selects one.
 3. **Snowflake connection in Hex**: `hex connection list --json`. Pick the Snowflake connection that
    matches the database the artifact queried (ask only if ambiguous).
 4. **Local Snowflake access** for validation: `scripts/sfquery.py` uses the Python connector and
    `~/.snowflake/connections.toml` (`--connection NAME` or `$SNOWFLAKE_CONNECTION`). If that's
    unavailable, use the Snowflake MCP `run_snowflake_query` tool for checks and save results to JSON.
-   Needs `pip install pyyaml jinja2 snowflake-connector-python` if missing.
+   Needs `pip install pyyaml jinja2 snowflake-connector-python` if missing. Run
+   `sfquery.py --whoami` to see which account it will query.
+   **Confirm the target now (Stop 0)** with both identities on screen. After the yes, pass
+   `--expect-account <account>` to every `sfquery.py` call so a changed login can't slip in.
 5. **Browser**: Claude in Chrome tools (`mcp__claude-in-chrome__*`) for the UI checks; the user must be
    signed in to Hex there. If Chrome isn't available, say the UI check will be skipped and continue.
 6. **Workdir**: `~/.artifact2hex/<artifact-slug>/` (survives restarts). Create the project and skeleton:
    ```
-   python3 <skill>/scripts/hexgen.py init <workdir> --title "<App name>" --connection <connection-id>
+   python3 <skill>/scripts/hexgen.py init <workdir> --title "<App name>" --connection <connection-id> \
+       --confirm-workspace <workspace id the user approved>
    ```
+   The workdir is pinned to that workspace: `push`/`run`/`status` refuse if the active hex login changes.
    (or `--project <id>` to reuse an existing project). It writes `hexgen.json` (project, connection,
    cell list), `app/app.css` (Hex tokens) and `app/componentValues.json`. Keep notes, specs and
    screenshots in the workdir too. If resuming, read `hexgen.json` and `state.json` first.

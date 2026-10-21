@@ -13,13 +13,22 @@ App code refers to cells by placeholder, e.g. useHexData("__CELL:orders__") or
 useHexInput("__CELL:selected_account__"). `push` swaps placeholders for the real static ids.
 
 Commands:
-  init  <workdir> --project <id> --connection <id>   create workdir skeleton (base css, config)
+  whoami                                             show the active Hex workspace/user (and blocklist status)
+  init  <workdir> --project <id> --connection <id> --confirm-workspace <id>
+                                                     create workdir skeleton (base css, config), pinned
+                                                     to the confirmed Hex workspace
   init  <workdir> --title "Name" --connection <id>   ...and create a new Hex project first
         [--css-from <project_id>]                      take theme tokens from this generative app
   push  <workdir> [--dry-run] [--allow-remove]       build YAML, import, repair connections, verify
                                                      (refuses to delete cells it didn't create unless --allow-remove)
   run   <workdir> [--timeout 900]                    run the draft notebook and wait for the result
   status <workdir>                                   show cells, connections and app files in Hex
+
+Safety: every command that touches Hex checks the active `hex` login against (a) the workspace the workdir
+was created for and (b) the optional per-machine blocklist in ~/.artifact2hex/config.json:
+    {"blocked_hex_workspaces": ["<workspace id>"], "blocked_snowflake_accounts": ["<ACCOUNT_LOCATOR>"]}
+It refuses to run on a mismatch or a blocked workspace. Nothing here stores or reads credentials itself:
+Hex access is the user's `hex` CLI login, Snowflake access is the user's connections.toml.
 
 Facts this script relies on (learned the hard way, hex CLI 1.2026.x):
   * `hex project import` with the same meta.projectId updates in place and keeps YAML cellIds
@@ -73,6 +82,42 @@ def hex_json(args):
         return json.loads(out)
     except json.JSONDecodeError:
         sys.exit(f"unexpected hex output for {' '.join(args)}:\n{out[:800]}")
+
+
+SAFETY_CONFIG = os.environ.get("ARTIFACT2HEX_CONFIG") or os.path.expanduser("~/.artifact2hex/config.json")
+
+
+def safety_config():
+    try:
+        with open(SAFETY_CONFIG) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError:
+        sys.exit(f"{SAFETY_CONFIG} is not valid JSON; fix it before continuing")
+
+
+def active_hex():
+    """The active hex CLI profile: {user_email, workspace_name, hostname, name}."""
+    st = hex_json(["auth", "status"])
+    prof = next((p for p in st.get("profiles", []) if p.get("active")), None)
+    if not prof or not prof.get("logged_in"):
+        sys.exit("hex CLI is not logged in: run `hex auth login` (or `hex auth switch <profile>`)")
+    return prof
+
+
+def guard_hex(expected_workspace=None):
+    """Refuse to touch Hex if the active workspace is blocked or differs from the pinned one."""
+    prof = active_hex()
+    ws = prof.get("workspace_name")
+    blocked = set(safety_config().get("blocked_hex_workspaces", []))
+    if ws in blocked:
+        sys.exit(f"refusing: active Hex workspace {ws} is blocked in {SAFETY_CONFIG}. "
+                 "Switch profile (`hex auth switch <profile>`) to the workspace you meant to use.")
+    if expected_workspace and ws != expected_workspace:
+        sys.exit(f"refusing: this workdir is pinned to Hex workspace {expected_workspace}, but the active "
+                 f"hex login is {prof.get('user_email')} @ {ws}. Switch back (`hex auth switch`) or start a new workdir.")
+    return prof
 
 
 def uuid7():
@@ -151,8 +196,21 @@ def base_css(explicit=None):
             + toks + "\n\n" + element_defaults)
 
 
+def cmd_whoami(a):
+    prof = active_hex()
+    ws = prof.get("workspace_name")
+    blocked = ws in set(safety_config().get("blocked_hex_workspaces", []))
+    print(json.dumps({"hex_profile": prof.get("name"), "hex_user": prof.get("user_email"), "hex_workspace": ws,
+                      "hex_host": prof.get("hostname"), "blocked": blocked, "safety_config": SAFETY_CONFIG}, indent=2))
+
+
 def cmd_init(a):
     wd = a.workdir
+    prof = guard_hex()
+    if a.confirm_workspace != prof.get("workspace_name"):
+        sys.exit(f"refusing: --confirm-workspace {a.confirm_workspace} does not match the active Hex workspace "
+                 f"{prof.get('workspace_name')} ({prof.get('user_email')}). Run `whoami`, show it to the user, "
+                 "and pass the workspace they approved.")
     os.makedirs(os.path.join(wd, "sql"), exist_ok=True)
     os.makedirs(os.path.join(wd, "app"), exist_ok=True)
     project_id = a.project
@@ -163,7 +221,8 @@ def cmd_init(a):
         project_id = created["id"]
         print(f"created Hex project {project_id}")
     cfg = load(wd, "hexgen.json", {})
-    cfg.update({"project_id": project_id, "connection_id": a.connection})
+    cfg.update({"project_id": project_id, "connection_id": a.connection,
+                "hex_workspace": prof.get("workspace_name"), "hex_user": prof.get("user_email")})
     cfg.setdefault("cells", [])
     save(wd, "hexgen.json", cfg)
     css = os.path.join(wd, "app", "app.css")
@@ -266,6 +325,7 @@ def cmd_push(a):
     if not cfg:
         sys.exit("no hexgen.json: run `init` first")
     pid = cfg["project_id"]
+    guard_hex(cfg.get("hex_workspace"))
     state = load(wd, "state.json", {})
     base = export(pid, os.path.join(wd, ".base.yaml"))
     # Import replaces the notebook: any cell not in hexgen.json is deleted. Only allow that for cells this
@@ -314,6 +374,7 @@ def cmd_push(a):
 def cmd_run(a):
     cfg = load(a.workdir, "hexgen.json")
     pid = cfg["project_id"]
+    guard_hex(cfg.get("hex_workspace"))
     started = hex_json(["project", "run", pid] + (["--no-cache"] if a.no_cache else []))
     rid = started.get("run_id") or started.get("runId")
     print(f"run {rid} started")
@@ -335,6 +396,7 @@ def cmd_run(a):
 
 def cmd_status(a):
     cfg = load(a.workdir, "hexgen.json")
+    guard_hex(cfg.get("hex_workspace"))
     d = export(cfg["project_id"], CHECK)
     for c in d["cells"]:
         extra = c["config"].get("dataConnectionId", c["config"].get("name"))
@@ -346,8 +408,10 @@ def cmd_status(a):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
+    w = sub.add_parser("whoami"); w.set_defaults(fn=cmd_whoami)
     i = sub.add_parser("init"); i.add_argument("workdir"); i.add_argument("--project"); i.add_argument("--title")
     i.add_argument("--description"); i.add_argument("--connection", required=True)
+    i.add_argument("--confirm-workspace", required=True, help="the Hex workspace id the user approved (see `whoami`)")
     i.add_argument("--css-from", help="project id of a generative app to copy theme tokens from"); i.set_defaults(fn=cmd_init)
     q = sub.add_parser("push"); q.add_argument("workdir"); q.add_argument("--dry-run", action="store_true")
     q.add_argument("--allow-remove", action="store_true", help="allow deleting existing cells that are not in hexgen.json"); q.set_defaults(fn=cmd_push)
