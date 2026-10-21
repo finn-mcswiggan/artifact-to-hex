@@ -55,6 +55,8 @@ machine running it: your `hex` CLI login and your `~/.snowflake/connections.toml
   ```
 
   Find the values with `python3 scripts/hexgen.py whoami` and `python3 scripts/sfquery.py --whoami`.
+  The file lives in your home folder, outside this repo and the installed skill, so it is never committed
+  (`.gitignore` also excludes it, and every other file a migration writes, as a backstop).
   Better still, keep separate logins: a dedicated `hex` profile (`hex auth login <profile>`,
   `hex auth switch <profile>`) and a dedicated Snowflake connection name (`SNOWFLAKE_CONNECTION=<name>`).
 

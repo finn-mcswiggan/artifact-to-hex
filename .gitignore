@@ -2,3 +2,14 @@ __pycache__/
 *.pyc
 .DS_Store
 *.skill
+
+# Machine-local files the skill writes. They hold workspace/project ids, SQL and query results,
+# so never commit them, even if a workdir ends up inside a repo.
+.artifact2hex/
+config.json
+hexgen.json
+state.json
+import.yaml
+.base.yaml
+out/
+expected/
