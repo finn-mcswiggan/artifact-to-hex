@@ -1,0 +1,76 @@
+/* Fallback theme tokens for a Hex generative app, used only when `hexgen.py init` cannot copy the
+   tokens from an existing generative app in your workspace. Token names follow the ones Hex-generated
+   apps use, so app styles work with either source. Hex sets data-theme="light"|"dark" on the root. */
+
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-text: #14161f;
+  --color-text-muted: #636a7d;
+  --color-text-placeholder: #9aa0ae;
+  --color-bg: #ffffff;
+  --color-bg-muted: #f6f7f9;
+  --color-border: #d9dce4;
+  --color-border-muted: #eceef2;
+  --color-border-control: var(--color-border);
+  --color-accent: #4b3f8f;
+  --color-success: #2a9d78;
+  --color-danger: #c4475a;
+  --color-warning: #d29a12;
+
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  --radius: 4px;
+  --radius-pill: 999px;
+  --content-max: 1240px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-text: #eef0f5;
+  --color-text-muted: #9ba2b3;
+  --color-text-placeholder: #6b7283;
+  --color-bg: #15171f;
+  --color-bg-muted: #1c1f29;
+  --color-border: #2e3240;
+  --color-border-muted: #242834;
+  --color-accent: #9a8cf0;
+  --color-success: #4cc493;
+  --color-danger: #ec7d8a;
+  --color-warning: #e6b347;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.45;
+}
+h1, h2, h3, h4 { font-weight: var(--font-weight-semibold); line-height: 1.2; }
+.h3 { font-size: var(--text-2xl); }
+.h4 { font-size: var(--text-lg); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
